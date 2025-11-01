@@ -76,6 +76,11 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     fetchMyDocuments();
+    
+    // Cleanup polling on unmount
+    return () => {
+      useDocumentStore.getState().stopPolling();
+    };
   }, [fetchMyDocuments]);
 
   const handleOpenAddDialog = async () => {
@@ -100,11 +105,8 @@ export default function DocumentsPage() {
       setShowAddDialog(false);
       toast({
         title: "Documents submitted",
-        description: `Processing ${selectedFiles.length} document(s) in the background`,
+        description: `Processing ${selectedFiles.length} document(s). Updates will appear automatically.`,
       });
-
-      // Refresh after 5 seconds to show processing status
-      setTimeout(() => fetchMyDocuments(), 5000);
     } catch (error) {
       const apiError = error as ApiError;
       toast({

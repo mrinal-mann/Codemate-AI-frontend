@@ -22,11 +22,16 @@ export default function DashboardPage() {
   const [question, setQuestion] = useState("");
   const { messages, isTyping, sendMessage, fetchSessions, sessions } =
     useChatStore();
-  const { myDocuments, fetchMyDocuments } = useDocumentStore();
+  const { myDocuments, fetchMyDocuments, isProcessing } = useDocumentStore();
 
   useEffect(() => {
     fetchMyDocuments();
     fetchSessions();
+    
+    // Cleanup polling on unmount
+    return () => {
+      useDocumentStore.getState().stopPolling();
+    };
   }, [fetchMyDocuments, fetchSessions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,7 +55,7 @@ export default function DashboardPage() {
       <div className="lg:col-span-2 space-y-6">
         {/* Welcome Card */}
         {messages.length === 0 && (
-          <Card className="bg-linear-to-br from-blue-50 to-purple-50 border-2">
+          <Card className="bg-gradient-to-br from-blue-50 to-purple-50 border-2">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Sparkles className="h-6 w-6 text-blue-600" />
@@ -62,6 +67,11 @@ export default function DashboardPage() {
                     You have <strong>{processedDocs.length} document(s)</strong>{" "}
                     ready. Start asking questions about your Google Docs,
                     Sheets, and Slides!
+                    {isProcessing && (
+                      <span className="block mt-2 text-orange-600 text-sm">
+                        ⚡ Processing documents in background...
+                      </span>
+                    )}
                   </>
                 ) : (
                   <>

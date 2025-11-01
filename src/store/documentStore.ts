@@ -8,6 +8,8 @@ interface DocumentState {
   selectedFiles: string[];
   isLoading: boolean;
   error: string | null;
+  isProcessing: boolean;
+  pollingInterval: NodeJS.Timeout | null;
 
   // Actions
   fetchDriveFiles: () => Promise<void>;
@@ -18,6 +20,8 @@ interface DocumentState {
   submitDocuments: () => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
   refreshDocuments: () => Promise<void>;
+  startPolling: () => void;
+  stopPolling: () => void;
   clearError: () => void;
 }
 
@@ -27,6 +31,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   selectedFiles: [],
   isLoading: false,
   error: null,
+  isProcessing: false,
+  pollingInterval: null,
 
   fetchDriveFiles: async () => {
     set({ isLoading: true, error: null });
@@ -46,7 +52,20 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const documents = await apiClient.getMyDocuments();
-      set({ myDocuments: documents, isLoading: false });
+      const hasProcessing = documents.some((doc) => !doc.isProcessed);
+      
+      set({ 
+        myDocuments: documents, 
+        isLoading: false,
+        isProcessing: hasProcessing 
+      });
+
+      // Start polling if there are processing documents
+      if (hasProcessing && !get().pollingInterval) {
+        get().startPolling();
+      } else if (!hasProcessing && get().pollingInterval) {
+        get().stopPolling();
+      }
     } catch (error) {
       const apiError = error as ApiError;
       set({
@@ -113,9 +132,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       await apiClient.refreshDocuments();
-      set({ isLoading: false });
-      // Fetch updated documents
-      setTimeout(() => get().fetchMyDocuments(), 2000);
+      set({ isLoading: false, isProcessing: true });
+      // Fetch updated documents and start polling
+      await get().fetchMyDocuments();
     } catch (error) {
       const apiError = error as ApiError;
       set({
@@ -123,6 +142,28 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           apiError.detail || apiError.error || "Failed to refresh documents",
         isLoading: false,
       });
+    }
+  },
+
+  startPolling: () => {
+    const { pollingInterval } = get();
+    if (pollingInterval) return; // Already polling
+
+    const interval = setInterval(() => {
+      const { isProcessing } = get();
+      if (isProcessing) {
+        get().fetchMyDocuments();
+      }
+    }, 5000); // Poll every 5 seconds
+
+    set({ pollingInterval: interval });
+  },
+
+  stopPolling: () => {
+    const { pollingInterval } = get();
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      set({ pollingInterval: null, isProcessing: false });
     }
   },
 
